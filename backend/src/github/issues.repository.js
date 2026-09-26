@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { issues } from "../db/schema/index.js";
+import { issues, repositories } from "../db/schema/index.js";
 
 export const upsertIssue = async ({ issue, repositoryId, installationId }) => {
   const values = {
@@ -75,6 +75,16 @@ export const getIssueById = async (issueId) => {
     .limit(1);
 
   return issue;
+};
+
+export const getIssueRepositoryName = async (repositoryId) => {
+  const [repository] = await db
+    .select({ fullName: repositories.fullName })
+    .from(repositories)
+    .where(eq(repositories.id, repositoryId))
+    .limit(1);
+
+  return repository?.fullName;
 };
 
 export const getIssues = async ({ repositoryId, state, limit }) => {

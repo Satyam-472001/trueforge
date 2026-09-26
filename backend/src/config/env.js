@@ -74,6 +74,16 @@ OPENAI: {
     API_KEY: requiredEnv("OPENAI_API_KEY"),
   },
 
+  TRUEFORGE: {
+    URL: optionalEnv("TRUEFORGE_URL", "http://localhost:8790"),
+    TOKEN: optionalEnv("TRUEFORGE_TOKEN", ""),
+    MODEL: optionalEnv("TRUEFORGE_MODEL", "openai/gpt-5-4-mini"),
+    ISSUE_TRIGGER_LABEL: optionalEnv(
+      "TRUEFORGE_ISSUE_TRIGGER_LABEL",
+      "trueforge:implement"
+    ),
+  },
+
   PORT: optionalEnv("PORT", 7200),
 };
 

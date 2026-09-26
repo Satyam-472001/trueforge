@@ -11,7 +11,13 @@ import {
 } from "../reaction/feedback.service.js";
 
 import { handleInstallationRepositoriesEvent } from "../github/installation/installation.handler.js";
-import { removeIssue, upsertIssue } from "../github/issues.repository.js";
+import {
+  claimIssueForAgent,
+  removeIssue,
+  updateIssueAgentRun,
+  upsertIssue
+} from "../github/issues.repository.js";
+import { startIssueCodingAgent } from "../agents/issueCoder.agent.js";
 import Logger from "../utils/logger/index.js";
 const logger = new Logger("webhook");
 
@@ -23,12 +29,15 @@ router.post(
   async (req, res) => {
     try {
       const signature = req.headers["x-hub-signature-256"];
-      const secret = process.env.GITHUB_WEBHOOK_SECRET;
+      const expected = crypto
+        .createHmac("sha256", ENV.GITHUB.WEBHOOK_SECRET)
+        .update(req.body)
+        .digest();
+      const received = typeof signature === "string" && signature.startsWith("sha256=")
+        ? Buffer.from(signature.slice(7), "hex")
+        : null;
 
-      const hmac = crypto.createHmac("sha256", secret);
-      const digest = "sha256=" + hmac.update(req.body).digest("hex");
-
-      if (signature !== digest) {
+      if (!received || received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) {
         return res.status(401).send("Invalid signature");
       }
 
@@ -50,6 +59,43 @@ router.post(
             await removeIssue(issue.id);
           } else {
             await upsertIssue({ issue, repositoryId, installationId });
+
+            const shouldStartAgent = ["opened", "reopened", "labeled"].includes(payload.action)
+              && issue.labels?.some((label) => label.name === ENV.TRUEFORGE.ISSUE_TRIGGER_LABEL);
+
+            if (shouldStartAgent) {
+              const claimedIssue = await claimIssueForAgent(issue.id);
+
+              if (claimedIssue) {
+                try {
+                  const run = await startIssueCodingAgent({
+                    id: issue.id,
+                    number: issue.number,
+                    title: issue.title,
+                    body: issue.body,
+                    htmlUrl: issue.html_url,
+                    repositoryFullName: payload.repository.full_name
+                  });
+
+                  await updateIssueAgentRun(issue.id, {
+                    agentSessionId: run.sessionId,
+                    agentTurnId: run.turnId,
+                    agentStatus: run.status,
+                    agentError: null
+                  });
+                } catch (error) {
+                  await updateIssueAgentRun(issue.id, {
+                    agentStatus: "failed",
+                    agentError: error.response?.data?.error?.message
+                      || error.message
+                  });
+                  logger.error("Failed to start TrueForge issue agent", {
+                    issueId: issue.id,
+                    error: error.response?.data || error.message
+                  });
+                }
+              }
+            }
           }
         }
       }

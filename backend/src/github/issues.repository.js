@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { issues } from "../db/schema/index.js";
 
@@ -38,6 +38,43 @@ export const upsertIssue = async ({ issue, repositoryId, installationId }) => {
 
 export const removeIssue = async (issueId) => {
   await db.delete(issues).where(eq(issues.id, issueId));
+};
+
+export const claimIssueForAgent = async (issueId) => {
+  const [claimedIssue] = await db
+    .update(issues)
+    .set({
+      agentStatus: "starting",
+      agentError: null,
+      agentStartedAt: new Date()
+    })
+    .where(and(
+      eq(issues.id, issueId),
+      or(isNull(issues.agentStatus), eq(issues.agentStatus, "failed"))
+    ))
+    .returning();
+
+  return claimedIssue;
+};
+
+export const updateIssueAgentRun = async (issueId, values) => {
+  const [updatedIssue] = await db
+    .update(issues)
+    .set(values)
+    .where(eq(issues.id, issueId))
+    .returning();
+
+  return updatedIssue;
+};
+
+export const getIssueById = async (issueId) => {
+  const [issue] = await db
+    .select()
+    .from(issues)
+    .where(eq(issues.id, issueId))
+    .limit(1);
+
+  return issue;
 };
 
 export const getIssues = async ({ repositoryId, state, limit }) => {

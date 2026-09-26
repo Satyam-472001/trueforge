@@ -8,6 +8,20 @@
       "when": 1779938988679,
       "tag": "0000_massive_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790411976678,
+      "tag": "0001_crazy_king_bedlam",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790417021739,
+      "tag": "0002_old_black_knight",
+      "breakpoints": true
     }
   ]
 }

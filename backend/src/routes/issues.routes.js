@@ -1,7 +1,48 @@
 import express from "express";
-import { getIssues } from "../github/issues.repository.js";
+import { getIssueById, getIssues, updateIssueAgentRun } from "../github/issues.repository.js";
+import { getIssueCodingAgentStatus } from "../agents/issueCoder.agent.js";
 
 const router = express.Router();
+
+router.get("/:issueId/agent", async (req, res) => {
+  if (!/^\d+$/.test(req.params.issueId)) {
+    return res.status(400).json({ error: "issueId must be numeric" });
+  }
+
+  try {
+    const issue = await getIssueById(Number(req.params.issueId));
+    if (!issue) return res.status(404).json({ error: "Issue not found" });
+
+    if (!issue.agentSessionId || !issue.agentTurnId) {
+      return res.json({
+        status: issue.agentStatus || "not_started",
+        error: issue.agentError || null
+      });
+    }
+
+    const state = await getIssueCodingAgentStatus(issue.agentSessionId, issue.agentTurnId);
+    const status = state?.status || issue.agentStatus;
+    const error = state?.message || state?.reason || issue.agentError;
+
+    if (status !== issue.agentStatus || error !== issue.agentError) {
+      await updateIssueAgentRun(issue.id, {
+        agentStatus: status,
+        agentError: error
+      });
+    }
+
+    return res.json({
+      status,
+      error: error || null,
+      sessionId: issue.agentSessionId,
+      turnId: issue.agentTurnId,
+      output: state?.output?.content || null
+    });
+  } catch (error) {
+    console.error("Failed to fetch TrueForge issue-agent status:", error);
+    return res.status(502).json({ error: "Unable to fetch issue-agent status" });
+  }
+});
 
 router.get("/", async (req, res) => {
   const { repositoryId, state } = req.query;
